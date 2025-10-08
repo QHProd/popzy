@@ -1,0 +1,74 @@
+.popzy--no-scroll {
+    overflow: hidden;
+}
+
+.popzy__backdrop {
+    background-color: rgba(57, 62, 70, 0.6);
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity, visibility, scale;
+    transition-duration: 0.3s;
+}
+
+.popzy__backdrop.popzy--show {
+    opacity: 1;
+    visibility: visible;
+    scale: 1;
+}
+
+.popzy__container {
+    position: relative;
+    background-color: #393e46;
+    width: min(600px, 90%);
+    border-radius: 10px;
+    padding: 32px 0 0;
+    scale: 0;
+    opacity: 0;
+    transition: scale opacity;
+    transition-duration: 0.2s;
+}
+
+.popzy__backdrop.popzy--show .popzy__container {
+    scale: 1;
+    opacity: 1;
+}
+
+.popzy--close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: #666;
+    background-color: #dfd0b8;
+    font-size: 2rem;
+}
+
+.popzy--close:hover {
+    color: #333;
+}
+
+.popzy__content {
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 0 32px;
+}
+
+.popzy__footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 12px 32px;
+}
+
+.popzy__footer-content {
+    width: 100%;
+    text-align: center;
+}
