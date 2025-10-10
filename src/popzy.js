@@ -164,7 +164,6 @@ Popzy.prototype._createButton = function (title, classListStr, action) {
     }
 
     button.addEventListener('click', action);
-
     return button;
 };
 
@@ -242,6 +241,8 @@ Popzy.prototype.open = function () {
         this.build();
     }
 
+    Popzy.openingModals.push(this);
+
     // Thêm class 'show' để hiển thị, setTimeout để có animation
     setTimeout(() => {
         this._backdrop.classList.add('popzy--show');
@@ -251,8 +252,8 @@ Popzy.prototype.open = function () {
     if (this.opt.enableSrcollLock) {
         const target = this.opt.scrollLockTarget();
 
-        // Chỉ xử lý nếu có scrollbar
-        if (this._hasScrollbar(target)) {
+        // Chỉ xử lý nếu có scrollbar và chỉ xử lý modal mở đầu tiên (tránh cộng dồn padding)
+        if (Popzy.openingModals.length === 1 && this._hasScrollbar(target)) {
             target.classList.add('popzy--no-scroll');
 
             const currentPaddingRight = parseFloat(getComputedStyle(target).paddingRight);
@@ -273,7 +274,6 @@ Popzy.prototype.open = function () {
 
             // Cập nhật isModalOpening
             this._isModalOpening = true;
-            Popzy.openingModals.push(this);
         },
         { once: true }
     );
@@ -296,6 +296,8 @@ Popzy.prototype.close = function (shouldDestroy = this.opt.destroyOnClose) {
     // Logic chỉ xử lý nếu có modal đang mở
     if (!this._isModalOpening) return;
 
+    Popzy.openingModals.pop();
+
     // Ẩn khỏi UI (vẫn còn trong DOM)
     this._backdrop.classList.remove('popzy--show');
 
@@ -308,8 +310,6 @@ Popzy.prototype.close = function (shouldDestroy = this.opt.destroyOnClose) {
             typeof this.opt.onClose === 'function' && this.opt.onClose();
             // Cập nhật isModalOpening sau khi chạy xong animation
             this._isModalOpening = false;
-
-            Popzy.openingModals.pop();
 
             // Khôi phục scroll và padding-right nếu không còn modal nào đang mở
             if (!Popzy.openingModals.length && this.opt.enableSrcollLock) {
@@ -350,14 +350,3 @@ Popzy.prototype.destroy = function () {
 
     this.close(true);
 };
-
-const basicModalBtn = document.querySelector('.js-popzy-modal-1');
-
-const basicModal = new Popzy({
-    content: `<h1>This is content</h1>
-            <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Quas, architecto! Perspiciatis eveniet quia cum suscipit asperiores voluptate minima repudiandae corrupti.</p>`,
-});
-
-basicModalBtn.addEventListener('click', () => {
-    basicModal.open();
-});
