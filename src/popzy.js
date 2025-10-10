@@ -4,6 +4,7 @@ function Popzy(options = {}) {
     // Xử lý options truyền vào:
     // Mặc định:
     //      - có 3 closeMethods = ['button', 'overlay', 'escape'] nếu caller không truyền đối số. Nếu caller truyền { closeMethods: ['button'] } thì chỉ có thể close modal bằng button
+    //      - khoá scroll khi mở modal: enableSrcollLock: true,
     //      - không có footer: footer = false
     //      - không thêm class nào vào Modal container: cssClass = []
     //      - mặc định khi close sẽ gỡ khỏi DOM, nếu caller truyền 'destroyOnClose: false' thì sẽ không gỡ khỏi DOM
@@ -11,20 +12,43 @@ function Popzy(options = {}) {
     this.opt = Object.assign(
         {
             closeMethods: ['button', 'overlay', 'escape'],
+            enableSrcollLock: true,
             footer: false,
             cssClass: [],
             destroyOnClose: true,
+            scrollLockTarget: () => document.body,
         },
         options
     );
 
-    this.template = document.getElementById(this.opt.templateId);
-    if (!this.template) {
-        console.error(`#${this.opt.templateId} does not exists`);
-        return;
+    const { content, templateId, closeMethods } = this.opt;
+
+    // Nếu người dùng truyền cả content và templateId thì sẽ in ra cảnh báo:
+    if (content && templateId) {
+        console.warn(
+            `[${this.constructor.name}] Warning: both 'content' and 'templateId' provided — ` +
+                `'content' will be used and 'templateId' will be ignored.`
+        );
     }
 
-    const { closeMethods } = this.opt;
+    // Nếu không truyền thì typeof === 'undefined' -> không cần kiểm tra dài dòng: if (content && typeof content === 'string')
+    // Ưu tiên lấy content. Nếu không có content thì lấy templateId
+    if (typeof content === 'string' && content.trim() !== '') {
+        this.content = content;
+    } else if (typeof templateId === 'string') {
+        this.template = document.getElementById(templateId);
+    }
+
+    // Validate: nếu cả 2 đều không có thì throw Error
+    if (!this.content && !this.template) {
+        const reason =
+            typeof templateId === 'string'
+                ? `Template "#${templateId}" not found in DOM`
+                : `Provide non-empty 'content' (string) or a valid 'templateId' (string)`;
+
+        throw new Error(`[${this.constructor.name}] Initialization failed: ${reason}.`);
+    }
+
     this._allowButtonClose = closeMethods.includes('button');
     this._allowBackdropClose = closeMethods.includes('overlay');
     this._allowEscapeClose = closeMethods.includes('escape');
@@ -36,29 +60,12 @@ function Popzy(options = {}) {
     this.escapeHandler = this.escapeHandler.bind(this);
 }
 
-// Xử lý scroll cách theo bài học
-Popzy.prototype._getScrollbarWidth = function () {
-    // Nếu đã cache thì return giá trị đã cache, không cần thực hiện lại logic tính toán bên dưới
-    if (this._scrollbarWidth) return this._scrollbarWidth;
-
-    const div = document.createElement('div');
-    div.style.overflow = 'scroll';
-    div.style.position = 'absolute';
-    div.style.top = '-9999px';
-
-    document.body.appendChild(div);
-    this._scrollbarWidth = div.offsetWidth - div.clientWidth;
-    document.body.removeChild(div);
-
-    return this._scrollbarWidth;
-};
-
 // Hàm create element và tạo cấu trúc html + append vào DOM
 Popzy.prototype.build = function () {
-    const content = this.template.content.cloneNode(true);
+    const content = this.content || this.template.content.cloneNode(true);
 
     this._backdrop = document.createElement('div');
-    this._backdrop.classList.add('popzy__backdrop');
+    this._backdrop.classList.add('popzy');
 
     const modalContainer = document.createElement('div');
     modalContainer.classList.add('popzy__container');
@@ -78,12 +85,16 @@ Popzy.prototype.build = function () {
         modalContainer.append(closeBtn);
     }
 
-    const modalContent = document.createElement('div');
-    modalContent.classList.add('popzy__content');
+    this._modalContent = document.createElement('div');
+    this._modalContent.classList.add('popzy__content');
 
     // Tạo cấu trúc html & append vào DOM
-    modalContent.append(content);
-    modalContainer.append(modalContent);
+    if (this.content) {
+        this._modalContent.innerHTML = content;
+    } else {
+        this._modalContent.append(content);
+    }
+    modalContainer.append(this._modalContent);
     this._backdrop.append(modalContainer);
     document.body.append(this._backdrop);
 
@@ -113,6 +124,34 @@ Popzy.prototype.build = function () {
     }
 };
 
+Popzy.prototype._hasScrollbar = function (target) {
+    const html = document.documentElement;
+    const body = document.body;
+
+    if ([html, body].includes(target)) {
+        return html.scrollHeight > html.clientHeight || body.scrollHeight > body.clientHeight;
+    }
+
+    return target.scrollHeight > target.clientHeight;
+};
+
+// Xử lý scroll cách theo bài học
+Popzy.prototype._getScrollbarWidth = function () {
+    // Nếu đã cache thì return giá trị đã cache, không cần thực hiện lại logic tính toán bên dưới
+    if (this._scrollbarWidth) return this._scrollbarWidth;
+
+    const div = document.createElement('div');
+    div.style.overflow = 'scroll';
+    div.style.position = 'absolute';
+    div.style.top = '-9999px';
+
+    document.body.appendChild(div);
+    this._scrollbarWidth = div.offsetWidth - div.clientWidth;
+    document.body.removeChild(div);
+
+    return this._scrollbarWidth;
+};
+
 // Hàm create button (dùng cho cả close button và footer button)
 Popzy.prototype._createButton = function (title, classListStr, action) {
     const button = document.createElement('button');
@@ -127,6 +166,14 @@ Popzy.prototype._createButton = function (title, classListStr, action) {
     button.addEventListener('click', action);
 
     return button;
+};
+
+// Hàm set content
+Popzy.prototype.setContent = function (content) {
+    this.content = content;
+    if (this._modalContent) {
+        this._modalContent.innerHTML = content;
+    }
 };
 
 // Hàm xử lý footer content
@@ -201,8 +248,17 @@ Popzy.prototype.open = function () {
     }, 0);
 
     // Xử lý scroll theo bài học
-    document.body.classList.add('popzy--no-scroll');
-    document.body.style.paddingRight = this._getScrollbarWidth() + 'px';
+    if (this.opt.enableSrcollLock) {
+        const target = this.opt.scrollLockTarget();
+
+        // Chỉ xử lý nếu có scrollbar
+        if (this._hasScrollbar(target)) {
+            target.classList.add('popzy--no-scroll');
+
+            const currentPaddingRight = parseFloat(getComputedStyle(target).paddingRight);
+            target.style.paddingRight = currentPaddingRight + this._getScrollbarWidth() + 'px';
+        }
+    }
 
     // Xử lý scroll cách 2
     // const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -256,9 +312,13 @@ Popzy.prototype.close = function (shouldDestroy = this.opt.destroyOnClose) {
             Popzy.openingModals.pop();
 
             // Khôi phục scroll và padding-right nếu không còn modal nào đang mở
-            if (!Popzy.openingModals.length) {
-                document.body.classList.remove('popzy--no-scroll');
-                document.body.style.paddingRight = ''; // gán chuỗi rỗng để gỡ khỏi DOM thay vì gán 0px
+            if (!Popzy.openingModals.length && this.opt.enableSrcollLock) {
+                const target = this.opt.scrollLockTarget();
+
+                if (this._hasScrollbar(target)) {
+                    target.classList.remove('popzy--no-scroll');
+                    target.style.paddingRight = ''; // gán chuỗi rỗng để gỡ khỏi DOM thay vì gán 0px
+                }
             }
 
             if (shouldDestroy && this._backdrop) {
@@ -290,3 +350,14 @@ Popzy.prototype.destroy = function () {
 
     this.close(true);
 };
+
+const basicModalBtn = document.querySelector('.js-popzy-modal-1');
+
+const basicModal = new Popzy({
+    content: `<h1>This is content</h1>
+            <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Quas, architecto! Perspiciatis eveniet quia cum suscipit asperiores voluptate minima repudiandae corrupti.</p>`,
+});
+
+basicModalBtn.addEventListener('click', () => {
+    basicModal.open();
+});
